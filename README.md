@@ -1,4 +1,6 @@
-# Daub
+# daub
+
+Live at <https://xanimo.github.io/daub/>.
 
 A fast, single-file paint and photo editor that runs entirely in the browser. No build step, no server, no accounts, no tracking — nothing you open or edit ever leaves your machine.
 
@@ -29,7 +31,7 @@ Open `index.html` in any browser. That is the whole install.
 3. Settings → Pages → Build and deployment → Source: **Deploy from a branch**, Branch: `main` / `/ (root)`.
 4. It goes live at `https://<user>.github.io/<repo>/`.
 
-Everything is static, so Pages serves it as-is. The only external request is the Google Fonts stylesheet for the wordmark; delete that one `<link>` in `index.html` to make it fully offline.
+Everything is static, so Pages serves it as-is. There are no external requests at all: the wordmark uses whatever Comic Sans the machine already has, falling back to the default cursive face.
 
 ## License
 MIT. See LICENSE.
