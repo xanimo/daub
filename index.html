@@ -116,6 +116,8 @@ img{max-width:100%}
   .sel{position:absolute;pointer-events:none;border:1px dashed #fff;
     box-shadow:0 0 0 1px rgba(0,0,0,.8);background:rgba(120,120,120,.12)}
   #zoomVal{min-width:44px}
+  #stampSeg{max-width:430px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:thin}
+  #stampSeg button{font-size:18px;padding:3px 5px;line-height:1.1}
 
   .hint{padding:6px 16px;background:var(--panel);border-top:1px solid var(--line);
     color:var(--muted);font-size:12px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
@@ -181,6 +183,11 @@ img{max-width:100%}
       <span class="seg" id="symSeg" role="group" aria-label="Symmetry"></span>
     </span>
 
+    <span class="grp" id="stampGrp" hidden>
+      <span class="lbl">Stamps</span>
+      <span class="seg" id="stampSeg" role="group" aria-label="Rubber stamps"></span>
+    </span>
+
     <span class="grp" id="brushGrp" hidden>
       <span class="lbl">Wacky</span>
       <span class="seg" id="brushSeg" role="group" aria-label="Brush mode"></span>
@@ -244,13 +251,13 @@ img{max-width:100%}
   ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
   function updateDims(){ document.getElementById('dims').textContent=W+" × "+H; } updateDims();
 
-  var state={tool:'pencil', color:'#c65d2e', size:8, fill:false, text:'', sym:0, brush:0};
+  var state={tool:'pencil', color:'#c65d2e', size:8, fill:false, text:'', sym:0, brush:0, stamp:0};
 
   // ---------- tools ----------
   var TOOLS=[
     ['pencil','Pencil'],['brush','Brush'],['eraser','Eraser'],
     ['line','Line'],['poly','Path'],['rect','Rect'],['oval','Oval'],
-    ['fill','Fill'],['text','Text'],['pick','Pick'],['spray','Spray'],
+    ['fill','Fill'],['text','Text'],['stamp','Stamp'],['pick','Pick'],['spray','Spray'],
     ['select','Select'],['crop','Crop'],['blur','Blur'],['pixel','Pixelate'],['redact','Redact']
   ];
   var FREEHAND={pencil:1,brush:1,eraser:1,spray:1};
@@ -273,6 +280,7 @@ img{max-width:100%}
     document.getElementById('curTool').textContent=label;
     document.getElementById('textIn').hidden = (name!=='text');
     document.getElementById('brushGrp').hidden = (name!=='brush');
+    document.getElementById('stampGrp').hidden = (name!=='stamp');
     canvas.style.cursor = (name==='pick'||name==='fill') ? 'crosshair' : 'crosshair';
   }
 
@@ -472,6 +480,33 @@ img{max-width:100%}
       if(state.fill) ctx.fill(); else ctx.stroke();
     }
   }
+  // ---------- rubber stamps ----------
+  /* Emoji rather than bundled art, so the stamp sheet costs no bytes and the
+     page stays a single file. */
+  var STAMPS=('🐶🐱🐸🐢🦖🐙🦋🐝🐞🦉⭐🌟✨🌈☀️🌙⛅🔥💧🌊⚡🌲🌵🌸🌻🍄🍎🍕🍦🎂🍩🎈🎁🎃👻'+
+              '💀👽🤖👑💎⚽🏀🚗🚓🚀✈️⛵🏠🎸🎺🎨✏️📚❤️💥💫🌀🎯🧩🎲🏆').match(/./gu);
+  var stampSeg=document.getElementById('stampSeg');
+  STAMPS.forEach(function(ch,i){
+    var b=document.createElement('button');
+    b.textContent=ch; b.dataset.stamp=i; b.title='Stamp '+ch;
+    b.setAttribute('aria-pressed', i===0);
+    b.addEventListener('click',function(){ setStamp(i); });
+    stampSeg.appendChild(b);
+  });
+  function setStamp(i){
+    state.stamp=i;
+    [].forEach.call(stampSeg.children,function(b){ b.setAttribute('aria-pressed', +b.dataset.stamp===i); });
+  }
+  function stampSize(){ return Math.max(16, state.size*4); }
+  function stampAt(p){
+    var fs=stampSize();
+    eachSym(function(){
+      ctx.font=fs+'px "Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(STAMPS[state.stamp], p.x, p.y);
+    });
+  }
+
   // ---------- wacky brushes ----------
   /* Every mode rolls its randomness before eachSym, so a kaleidoscope copies
      one shape rather than inventing a fresh one per quadrant. */
@@ -738,6 +773,7 @@ img{max-width:100%}
     if(state.tool==='pick'){ pick(p); return; }
     if(state.tool==='fill'){ fillBucket(p); return; }
     if(state.tool==='text'){ placeText(p); return; }
+    if(state.tool==='stamp'){ pushUndo(); stampAt(p); drawing=true; last=p; return; }
     if(state.tool==='poly'){ extendPath(p); return; }
     if(state.tool==='select'){
       if(inSel(p)){                       /* lift the pixels and drag them */
@@ -773,6 +809,9 @@ img{max-width:100%}
     var q = e.shiftKey ? squareify(start,p) : p;
     if(MARQUEE[state.tool]){ setState(snapshot); marquee(start,q); }
     else if(SHAPES[state.tool]){ setState(snapshot); shape(start, state.tool==='line'?p:q); }
+    else if(state.tool==='stamp'){   /* drag lays a trail, spaced so they do not pile up */
+      if(Math.hypot(p.x-last.x,p.y-last.y) > stampSize()*0.85){ stampAt(p); last=p; }
+    }
     else if(state.tool==='spray'){ sprayAt(p); }
     else if(state.tool==='brush'){ wackyStep(last,p); last=p; }
     else { segment(last,p); last=p; }
