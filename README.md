@@ -8,6 +8,9 @@ Built to paint *and* to scrub screenshots before you post them: crop, blur, pixe
 
 ## Features
 - Paint tools: pencil, brush, eraser, line, rectangle, oval, fill, text, eyedropper, spray
+- Path: click point to point, double-click or `Enter` to finish, click the first point again to close the shape
+- Select: drag a box (`Shift` constrains it to a square), drag it again to move the pixels, `Del` clears it, `Esc` drops it. Filters apply only inside a selection when one is up
+- Zoom from 25% to 800% or fit to the window, with `-`, `+`, `0` and `1`
 - Color palette + custom color picker, adjustable brush size
 - Open any image and edit it
 - One-tap filters: grayscale, invert, sepia, brighten, darken, contrast, saturate, fade, blur
@@ -31,7 +34,9 @@ Open `index.html` in any browser. That is the whole install.
 3. Settings → Pages → Build and deployment → Source: **Deploy from a branch**, Branch: `main` / `/ (root)`.
 4. It goes live at `https://<user>.github.io/<repo>/`.
 
-Everything is static, so Pages serves it as-is. There are no external requests at all: the wordmark uses whatever Comic Sans the machine already has, falling back to the default cursive face.
+Everything is static, so Pages serves it as-is, and the page makes no external requests at all. The wordmark prefers a locally installed Comic Sans and falls back to Comic Neue, which is embedded in `index.html` as a base64 woff2 so it renders the same on Linux and Android where Comic Sans is not installed.
 
 ## License
 MIT. See LICENSE.
+
+Comic Neue is licensed separately under the SIL Open Font License 1.1. See FONT-LICENSE.txt.
