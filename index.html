@@ -183,6 +183,11 @@ img{max-width:100%}
       <span class="seg" id="symSeg" role="group" aria-label="Symmetry"></span>
     </span>
 
+    <span class="grp" id="eraserGrp" hidden>
+      <span class="lbl">Eraser</span>
+      <span class="seg" id="eraserSeg" role="group" aria-label="Eraser mode"></span>
+    </span>
+
     <span class="grp" id="stampGrp" hidden>
       <span class="lbl">Stamps</span>
       <span class="seg" id="stampSeg" role="group" aria-label="Rubber stamps"></span>
@@ -251,7 +256,8 @@ img{max-width:100%}
   ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
   function updateDims(){ document.getElementById('dims').textContent=W+" × "+H; } updateDims();
 
-  var state={tool:'pencil', color:'#c65d2e', size:8, fill:false, text:'', sym:0, brush:0, stamp:0};
+  var state={tool:'pencil', color:'#c65d2e', size:8, fill:false, text:'', sym:0,
+             brush:0, stamp:0, eraser:0};
 
   // ---------- tools ----------
   var TOOLS=[
@@ -281,6 +287,7 @@ img{max-width:100%}
     document.getElementById('textIn').hidden = (name!=='text');
     document.getElementById('brushGrp').hidden = (name!=='brush');
     document.getElementById('stampGrp').hidden = (name!=='stamp');
+    document.getElementById('eraserGrp').hidden = (name!=='eraser');
     canvas.style.cursor = (name==='pick'||name==='fill') ? 'crosshair' : 'crosshair';
   }
 
@@ -442,7 +449,10 @@ img{max-width:100%}
   document.getElementById('zoomOut').addEventListener('click',function(){ zoomStep(-1); });
   document.getElementById('zoomFit').addEventListener('click',function(){ setZoom(0); });
   document.getElementById('zoom100').addEventListener('click',function(){ setZoom(1); });
-  if(window.ResizeObserver) new ResizeObserver(function(){ if(!zoom) applyZoom(); }).observe(stage);
+  /* Resizing inside the observer callback re-notifies in the same frame and
+     Chrome warns about undelivered notifications, so defer the write a frame. */
+  if(window.ResizeObserver)
+    new ResizeObserver(function(){ if(!zoom) requestAnimationFrame(applyZoom); }).observe(stage);
   addEventListener('resize',function(){ if(!zoom) applyZoom(); });
 
   // ---------- drawing ----------
@@ -480,6 +490,98 @@ img{max-width:100%}
       if(state.fill) ctx.fill(); else ctx.stroke();
     }
   }
+  // ---------- wacky erasers ----------
+  /* Picking anything but Plain turns the eraser into a one-shot animation that
+     takes the whole picture away. Clicking the canvas sets it off. */
+  var ERASERS=['Plain','Firecracker','Black hole','Fade','Drip','Shred','Sweep'];
+  var busy=false;
+  function snapCanvas(){
+    var t=document.createElement('canvas'); t.width=W; t.height=H;
+    t.getContext('2d').drawImage(canvas,0,0); return t;
+  }
+  function white(){ ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H); }
+  function animate(dur,step){
+    busy=true;
+    var t0=performance.now();
+    requestAnimationFrame(function frame(now){
+      var k=Math.min(1,(now-t0)/dur);
+      ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
+      step(k);
+      if(k<1) requestAnimationFrame(frame);
+      else { white(); busy=false; }
+    });
+  }
+  function wipe(){
+    var mode=ERASERS[state.eraser];
+    pushUndo();
+    if(matchMedia('(prefers-reduced-motion:reduce)').matches){ white(); return; }
+    var src=snapCanvas(), i, burst=[], speed=[];
+    if(mode==='Firecracker'){
+      for(i=0;i<16;i++) burst.push([rnd(0,W), rnd(0,H), rnd(W*0.12,W*0.34), rnd(0,0.45)]);
+      animate(900,function(k){
+        white(); ctx.drawImage(src,0,0);
+        ctx.fillStyle='#ffffff';
+        for(var j=0;j<burst.length;j++){
+          var b=burst[j], kk=(k-b[3])/(1-b[3]);
+          if(kk<=0) continue;
+          ctx.beginPath(); ctx.arc(b[0],b[1],kk*b[2],0,6.2832); ctx.fill();
+        }
+        if(k<0.12){ ctx.globalAlpha=(0.12-k)/0.12*0.7; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+        if(k>0.78){ ctx.globalAlpha=(k-0.78)/0.22; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+      });
+    } else if(mode==='Black hole'){
+      animate(900,function(k){
+        white();
+        ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(k*7); ctx.scale(1-k,1-k);
+        ctx.drawImage(src,-W/2,-H/2); ctx.restore();
+      });
+    } else if(mode==='Fade'){
+      animate(800,function(k){
+        white(); ctx.globalAlpha=1-k; ctx.drawImage(src,0,0); ctx.globalAlpha=1;
+      });
+    } else if(mode==='Drip'){
+      var cols=48, cw=Math.ceil(W/cols);
+      for(i=0;i<cols;i++) speed.push(rnd(1.1,2.1));
+      animate(1100,function(k){
+        white();
+        for(var j=0;j<cols;j++){
+          var dy=k*k*H*speed[j];
+          ctx.drawImage(src, j*cw,0,cw,H, j*cw,dy,cw,H);
+        }
+      });
+    } else if(mode==='Shred'){
+      var n=40, sw=Math.ceil(W/n);
+      animate(800,function(k){
+        white();
+        for(var j=0;j<n;j++){
+          var w2=sw*(1-k); if(w2<=0) continue;
+          ctx.drawImage(src, j*sw,0,sw,H, j*sw+(sw-w2)/2,0,w2,H);
+        }
+      });
+    } else {  /* Sweep */
+      var R=Math.hypot(W,H);
+      animate(800,function(k){
+        white(); ctx.drawImage(src,0,0);
+        ctx.fillStyle='#ffffff';
+        ctx.beginPath(); ctx.moveTo(W/2,H/2);
+        ctx.arc(W/2,H/2,R,-Math.PI/2,-Math.PI/2+k*6.2832); ctx.closePath(); ctx.fill();
+      });
+    }
+  }
+  var eraserSeg=document.getElementById('eraserSeg');
+  ERASERS.forEach(function(name,i){
+    var b=document.createElement('button');
+    b.textContent=name; b.dataset.eraser=i;
+    b.setAttribute('aria-pressed', i===0);
+    b.addEventListener('click',function(){ setEraser(i); });
+    eraserSeg.appendChild(b);
+  });
+  function setEraser(i){
+    state.eraser=i;
+    [].forEach.call(eraserSeg.children,function(b){ b.setAttribute('aria-pressed', +b.dataset.eraser===i); });
+  }
+
   // ---------- rubber stamps ----------
   /* Emoji rather than bundled art, so the stamp sheet costs no bytes and the
      page stays a single file. */
@@ -768,8 +870,11 @@ img{max-width:100%}
 
   // ---------- pointer ----------
   canvas.addEventListener('pointerdown',function(e){
-    e.preventDefault(); canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    if(busy) return;                 /* a wipe is playing; ignore the canvas */
+    canvas.setPointerCapture(e.pointerId);
     var p=pos(e);
+    if(state.tool==='eraser' && state.eraser){ wipe(); return; }
     if(state.tool==='pick'){ pick(p); return; }
     if(state.tool==='fill'){ fillBucket(p); return; }
     if(state.tool==='text'){ placeText(p); return; }
