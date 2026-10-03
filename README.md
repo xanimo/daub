@@ -4,7 +4,7 @@ Live at <https://xanimo.github.io/daub/>.
 
 A fast, single-file paint and photo editor that runs entirely in the browser. No build step, no server, no accounts, no tracking — nothing you open or edit ever leaves your machine.
 
-Built to paint *and* to scrub screenshots before you post them: crop, blur, pixelate, and a solid redact box.
+Built to paint *and* to scrub screenshots before you post them: crop, blur, pixelate, and a solid redact box. With a large helping of Kid Pix bolted on, since that is the paint program that understood kids would rather be surprised than be precise.
 
 ## Features
 - Paint tools: pencil, brush, eraser, line, rectangle, oval, fill, text, eyedropper, spray
@@ -18,6 +18,17 @@ Built to paint *and* to scrub screenshots before you post them: crop, blur, pixe
 - Privacy tools: blur, pixelate, redact — drag a box over anything you want hidden
 - Undo / redo (`Ctrl+Z` / `Ctrl+Y`), brush size with `[` and `]`
 - Light / dark
+
+## The Kid Pix bits
+- Symmetry: Off, Mirror, Quad, Kaleido 8 and Kaleido 12 replay every stroke as rotated and mirrored copies about the centre of the canvas. Works with pencil, brush, eraser, spray, stamps and path
+- Wacky brush: nine modes behind the Brush tool, so rainbow, drip, echo, fur, bubbles, pies, confetti and web as well as plain
+- Rubber stamps: 65 of them, placed on click and laid as a trail on drag
+- Wacky erasers: pick anything but Plain and clicking the canvas takes the whole picture away with a firecracker, a black hole, a fade, a drip, a shred or a sweep. All undoable
+- Electric mixer: the **Mix** button mangles the whole picture a different way each press, nine effects deep, never the same one twice running
+- Noises on everything, synthesised rather than sampled. The speaker button mutes it
+- An undo button with a face on it
+
+Reduced-motion settings skip the eraser animations and go straight to the cleared canvas.
 
 ## Hiding sensitive information
 For actually removing information — a wallet address, a username, a face — use **Redact**, the solid black box. Blur and pixelate look cleaner but can sometimes be partially reversed; a black box cannot.
