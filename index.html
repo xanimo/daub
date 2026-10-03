@@ -151,9 +151,10 @@ img{max-width:100%}
     <div class="group">
       <button id="openBtn">Open image</button>
       <button id="newBtn">New</button>
-      <button id="undoBtn" disabled>Undo</button>
+      <button id="undoBtn" disabled>Undo <span id="undoGuy">🙂</span></button>
       <button id="redoBtn" disabled>Redo</button>
       <button id="saveBtn" class="primary">Save</button>
+      <button id="soundBtn" title="Sound on / off" aria-label="Sound" aria-pressed="true">🔊</button>
       <button id="themeBtn" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
     </div>
     <input type="file" id="fileIn" accept="image/*" hidden>
@@ -276,7 +277,7 @@ img{max-width:100%}
     var b=document.createElement('button');
     b.textContent=t[1]; b.dataset.tool=t[0];
     b.setAttribute('aria-pressed', t[0]===state.tool);
-    b.addEventListener('click',function(){ setTool(t[0]); });
+    b.addEventListener('click',function(){ setTool(t[0]); SFX.tool(TOOLS.indexOf(t)); });
     toolSeg.appendChild(b);
   });
   function setTool(name){
@@ -330,8 +331,14 @@ img{max-width:100%}
     ctx.putImageData(s,0,0);
   }
   function pushUndo(){ undo.push(getState()); if(undo.length>MAX) undo.shift(); redo.length=0; refresh(); }
-  function doUndo(){ if(!undo.length) return; redo.push(getState()); setState(undo.pop()); refresh(); }
-  function doRedo(){ if(!redo.length) return; undo.push(getState()); setState(redo.pop()); refresh(); }
+  var undoGuy=document.getElementById('undoGuy'), guyTimer=null;
+  function pullFace(){
+    undoGuy.textContent='😵';
+    clearTimeout(guyTimer);
+    guyTimer=setTimeout(function(){ undoGuy.textContent='🙂'; },420);
+  }
+  function doUndo(){ if(!undo.length) return; redo.push(getState()); setState(undo.pop()); refresh(); SFX.undo(); pullFace(); }
+  function doRedo(){ if(!redo.length) return; undo.push(getState()); setState(redo.pop()); refresh(); SFX.redo(); }
   function refresh(){ undoBtn.disabled=!undo.length; redoBtn.disabled=!redo.length; }
   undoBtn.addEventListener('click',doUndo);
   redoBtn.addEventListener('click',doRedo);
@@ -346,6 +353,70 @@ img{max-width:100%}
     return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[0,0,0];
   }
   function rgbToHex(r,g,b){ return '#'+[r,g,b].map(function(n){return ('0'+n.toString(16)).slice(-2);}).join(''); }
+
+  // ---------- noises ----------
+  /* Synthesised rather than sampled, so the editor stays one file with no
+     assets. Everything here is a no-op if WebAudio is missing or muted. */
+  var actx=null, muted=false;
+  function audio(){
+    if(!actx){
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC) return null;
+      try{ actx=new AC(); }catch(e){ return null; }
+    }
+    if(actx.state==='suspended') actx.resume();
+    return actx;
+  }
+  function tone(freq,dur,type,vol,slideTo){
+    if(muted) return;
+    var a=audio(); if(!a) return;
+    var t=a.currentTime, o=a.createOscillator(), g=a.createGain();
+    o.type=type||'square';
+    o.frequency.setValueAtTime(freq,t);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo), t+dur);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.14, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t); o.stop(t+dur+0.03);
+  }
+  function noise(dur,vol,cut){
+    if(muted) return;
+    var a=audio(); if(!a) return;
+    var n=Math.max(1,Math.floor(a.sampleRate*dur)), buf=a.createBuffer(1,n,a.sampleRate);
+    var d=buf.getChannelData(0), i;
+    for(i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);   /* decaying hiss */
+    var s=a.createBufferSource(); s.buffer=buf;
+    var f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut||1400;
+    var g=a.createGain(); g.gain.value=vol||0.25;
+    s.connect(f); f.connect(g); g.connect(a.destination); s.start();
+  }
+  var SFX={
+    tool:  function(i){ tone(430+((i||0)%8)*45, 0.06,'square',0.09); },
+    dab:   function(){ tone(260,0.04,'triangle',0.07); },
+    stamp: function(){ tone(640,0.11,'sine',0.18,1500); },
+    bucket:function(){ tone(180,0.28,'sawtooth',0.13,620); },
+    type:  function(){ tone(900,0.03,'square',0.08); },
+    undo:  function(){ tone(460,0.17,'square',0.13,170); },
+    redo:  function(){ tone(190,0.17,'square',0.13,470); },
+    mix:   function(){ tone(300,0.1,'sawtooth',0.12,900); setTimeout(function(){ tone(900,0.12,'sawtooth',0.12,300); },90); },
+    filter:function(){ tone(540,0.09,'sine',0.11,760); },
+    bang:  function(){ noise(0.5,0.32,2600); tone(90,0.4,'sawtooth',0.16,40); },
+    suck:  function(){ tone(820,0.6,'sine',0.14,60); },
+    puff:  function(){ noise(0.5,0.16,700); },
+    bloop: function(){ tone(520,0.45,'sine',0.13,120); },
+    rip:   function(){ noise(0.4,0.22,3800); },
+    swoosh:function(){ noise(0.45,0.2,1100); tone(240,0.4,'sine',0.08,700); }
+  };
+  var WIPE_SFX={'Firecracker':'bang','Black hole':'suck','Fade':'puff',
+                'Drip':'bloop','Shred':'rip','Sweep':'swoosh'};
+  var soundBtn=document.getElementById('soundBtn');
+  soundBtn.addEventListener('click',function(){
+    muted=!muted;
+    soundBtn.textContent = muted ? '🔇' : '🔊';
+    soundBtn.setAttribute('aria-pressed', String(!muted));
+    if(!muted) SFX.tool(2);
+  });
 
   // ---------- symmetry ----------
   /* Each mode is k rotations about the canvas centre, optionally doubled by a
@@ -517,6 +588,7 @@ img{max-width:100%}
   function wipe(){
     var mode=ERASERS[state.eraser];
     pushUndo();
+    SFX[WIPE_SFX[mode]]();
     if(matchMedia('(prefers-reduced-motion:reduce)').matches){ white(); return; }
     var src=snapCanvas(), i, burst=[], speed=[];
     if(mode==='Firecracker'){
@@ -877,11 +949,11 @@ img{max-width:100%}
     canvas.setPointerCapture(e.pointerId);
     var p=pos(e);
     if(state.tool==='eraser' && state.eraser){ wipe(); return; }
-    if(state.tool==='pick'){ pick(p); return; }
-    if(state.tool==='fill'){ fillBucket(p); return; }
-    if(state.tool==='text'){ placeText(p); return; }
-    if(state.tool==='stamp'){ pushUndo(); stampAt(p); drawing=true; last=p; return; }
-    if(state.tool==='poly'){ extendPath(p); return; }
+    if(state.tool==='pick'){ pick(p); SFX.type(); return; }
+    if(state.tool==='fill'){ fillBucket(p); SFX.bucket(); return; }
+    if(state.tool==='text'){ placeText(p); SFX.type(); return; }
+    if(state.tool==='stamp'){ pushUndo(); stampAt(p); SFX.stamp(); drawing=true; last=p; return; }
+    if(state.tool==='poly'){ extendPath(p); SFX.dab(); return; }
     if(state.tool==='select'){
       if(inSel(p)){                       /* lift the pixels and drag them */
         pushUndo();
@@ -892,7 +964,7 @@ img{max-width:100%}
       drawing=true; return;
     }
     if(MARQUEE[state.tool]){ snapshot=getState(); drawing=true; start=p; return; }
-    pushUndo();
+    pushUndo(); SFX.dab();
     drawing=true; last=p; start=p;
     if(SHAPES[state.tool]){ snapshot=getState(); }
     else if(state.tool==='spray'){ sprayAt(p); }
@@ -955,7 +1027,7 @@ img{max-width:100%}
   fseg.parentNode.insertBefore(flbl,fseg);
   FILTERS.forEach(function(f){
     var b=document.createElement('button'); b.textContent=f[0];
-    b.addEventListener('click',function(){ applyFilter(f[1]); });
+    b.addEventListener('click',function(){ applyFilter(f[1]); SFX.filter(); });
     fseg.appendChild(b);
   });
   /* With a selection up, a filter only touches what is inside it. */
@@ -1037,7 +1109,7 @@ img{max-width:100%}
   var lastMix=-1;
   document.getElementById('mixBtn').addEventListener('click',function(){
     if(busy) return;
-    pushUndo();
+    pushUndo(); SFX.mix();
     var i=Math.floor(Math.random()*MIXES.length);
     if(MIXES.length>1 && i===lastMix) i=(i+1)%MIXES.length;   /* never twice running */
     lastMix=i;
