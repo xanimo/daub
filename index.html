@@ -214,6 +214,7 @@ img{max-width:100%}
 
     <div class="divider"></div>
     <div class="seg" id="filterSeg" role="group" aria-label="Filters"></div>
+    <button id="mixBtn" title="Mangle the whole picture a different way each time">🌀 Mix</button>
   </div>
 
   <div class="stage">
@@ -232,6 +233,7 @@ img{max-width:100%}
     <span><b>Path</b>: click each point, <kbd>Enter</kbd> or double-click to finish</span>
     <span><b>Select</b>: drag a box (<kbd>Shift</kbd> = square), drag it again to move, <kbd>Del</kbd> to clear</span>
     <span>Scrub a screenshot: drag <b>Crop</b>, <b>Blur</b>, <b>Pixelate</b> or <b>Redact</b> (black box is safest)</span>
+    <span id="mixName"></span>
     <span id="dims"></span>
   </div>
 </div>
@@ -965,6 +967,86 @@ img{max-width:100%}
     ctx.clearRect(r.x,r.y,r.w,r.h);
     ctx.drawImage(t, r.x,r.y,r.w,r.h, r.x,r.y,r.w,r.h);
   }
+
+  // ---------- electric mixer ----------
+  /* One button, a different mangle every press. Each takes a snapshot of the
+     picture and rebuilds the canvas from it. */
+  var MIXES=[
+    ['Kaleidoscope',function(src){
+      var hw=W/2, hh=H/2, q=[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]];
+      q.forEach(function(t){
+        ctx.save(); ctx.translate(t[0],t[1]); ctx.scale(t[2],t[3]);
+        ctx.drawImage(src,0,0,hw,hh,0,0,hw,hh); ctx.restore();
+      });
+    }],
+    ['Tiles',function(src){
+      var n=3, tw=W/n, th=H/n, i, j;
+      for(i=0;i<n;i++) for(j=0;j<n;j++) ctx.drawImage(src,0,0,W,H, i*tw,j*th,tw,th);
+    }],
+    ['Shuffle',function(src){
+      var cx2=6, cy2=4, bw=W/cx2, bh=H/cy2, cells=[], i;
+      for(i=0;i<cx2*cy2;i++) cells.push(i);
+      for(i=cells.length-1;i>0;i--){ var r2=Math.floor(Math.random()*(i+1)); var t=cells[i]; cells[i]=cells[r2]; cells[r2]=t; }
+      cells.forEach(function(from,to){
+        ctx.drawImage(src, (from%cx2)*bw, Math.floor(from/cx2)*bh, bw,bh,
+                           (to%cx2)*bw,   Math.floor(to/cx2)*bh,   bw,bh);
+      });
+    }],
+    ['Wave',function(src){
+      var amp=rnd(12,40), per=rnd(18,60), y;
+      white();
+      for(y=0;y<H;y++) ctx.drawImage(src, 0,y,W,1, Math.sin(y/per)*amp, y, W,1);
+    }],
+    ['Ripple',function(src){
+      var amp=rnd(10,30), per=rnd(14,40), y;
+      white();
+      for(y=0;y<H;y++){
+        var d=Math.abs(y-H/2)/ (H/2), s=1+Math.sin(d*per)*amp/200;
+        ctx.drawImage(src, 0,y,W,1, (W-W*s)/2, y, W*s, 1);
+      }
+    }],
+    ['Flip halves',function(src){
+      ctx.drawImage(src,0,0);
+      ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
+      ctx.drawImage(src, 0,0,W/2,H, 0,0,W/2,H); ctx.restore();
+    }],
+    ['Smear',function(src){
+      ctx.drawImage(src,0,0);
+      for(var i=1;i<=14;i++){
+        ctx.globalAlpha=0.16; var s=1+i*0.015;
+        ctx.drawImage(src, (W-W*s)/2, (H-H*s)/2, W*s, H*s);
+      }
+      ctx.globalAlpha=1;
+    }],
+    ['Colour spin',function(src){
+      var t=document.createElement('canvas'); t.width=W; t.height=H;
+      var tc=t.getContext('2d');
+      tc.filter='hue-rotate('+Math.round(rnd(60,300))+'deg) saturate(2.2) contrast(1.15)';
+      tc.drawImage(src,0,0);
+      ctx.drawImage(t,0,0);
+    }],
+    ['Stretch',function(src){
+      var y=0;
+      while(y<H){
+        var band=Math.round(rnd(8,46)), to=Math.round(rnd(8,70));
+        ctx.drawImage(src, 0,y,W,band, 0,y,W,to);
+        y+=band;
+      }
+    }]
+  ];
+  var lastMix=-1;
+  document.getElementById('mixBtn').addEventListener('click',function(){
+    if(busy) return;
+    pushUndo();
+    var i=Math.floor(Math.random()*MIXES.length);
+    if(MIXES.length>1 && i===lastMix) i=(i+1)%MIXES.length;   /* never twice running */
+    lastMix=i;
+    var src=snapCanvas();
+    ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
+    MIXES[i][1](src);
+    ctx.globalAlpha=1;
+    document.getElementById('mixName').textContent='Mixer: '+MIXES[i][0];
+  });
 
   // ---------- file actions ----------
   var fileIn=document.getElementById('fileIn');
